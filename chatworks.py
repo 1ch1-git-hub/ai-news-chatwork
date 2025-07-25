@@ -216,12 +216,45 @@ def fetch_ai_news(limit: int = NEWS_LIMIT) -> list[dict]:
 
     # AI関連キーワードでフィルタリング（拡張キーワード）
     ai_keywords = [
+    # 基本・全般
         "ai", "ＡＩ", "人工知能", "機械学習", "マシンラーニング", "深層学習", "ディープラーニング",
-        "chatgpt", "チャットgpt", "claude", "gemini", "copilot", "gpt", "llm", "生成ai", "生成ＡＩ",
-        "画像生成", "自然言語処理", "nlp", "自動化", "ロボット", "アルゴリズム", "neural",
-        "tensorflow", "pytorch", "openai", "google ai", "microsoft ai", "anthropic",
-        "自動運転", "音声認識", "顔認識", "予測モデル", "データサイエンス", "ビッグデータ"
+        "ニューラルネットワーク", "自然言語処理", "nlp", "アルゴリズム", "予測モデル",
+        "強化学習", "教師あり学習", "教師なし学習", "自己教師あり学習",
+    
+        # 生成AI・LLM
+        "生成ai", "生成ＡＩ", "大規模言語モデル", "llm", "マルチモーダルai", "multimodal",
+        "aiアシスタント", "aiエージェント", "aiエージェントシステム", "エージェントai", "ai代理人",
+        "プロンプトエンジニアリング", "自律エージェント", "オートエージェント", "オーケストレーションai",
+    
+        # モデル名
+        "chatgpt", "チャットgpt", "gpt", "gpt-3.5", "gpt-4", "gpt-4o",
+        "gemini", "bard", "claude", "claude2", "claude3",
+        "llama2", "llama3", "mistral", "mixtral", "command-r", "bloom", "orca", "groq", "stablelm",
+    
+        # 企業・サービス名（含：エージェントプラットフォーム）
+        "openai", "anthropic", "google ai", "microsoft ai", "meta ai", "nvidia", "huggingface",
+        "xai", "amazon bedrock", "cohere", "stability ai", "databricks", "perplexity", "groq",
+        "genspark", "autogen", "autogpt", "babyagi", "agentgpt", "crew ai", "metaagent", "openagents",
+    
+        # ツール・ライブラリ・技術要素
+        "neural", "transformer", "attention", "diffusion model", "vae", "gan", "embedding",
+        "tokenizer", "tensor", "vectordb", "pinecone", "faiss", "weaviate",
+        "tensorflow", "pytorch", "keras", "langchain", "llamaindex", "openrouter", "ollama",
+    
+        # 応用・ユースケース
+        "画像生成", "text to image", "音声生成", "text to speech", "動画生成", "自動要約",
+        "ai検索", "ai翻訳", "ai通訳", "aiライティング", "aiデザイン", "aiコーディング",
+        "業務自動化", "業務効率化", "チャットボット", "ナレッジ管理", "no-code ai", "low-code ai",
+    
+        # 社会的関心・規制
+        "ai倫理", "ai規制", "aiガバナンス", "ai著作権", "aiリスク", "aiハルシネーション",
+        "ディープフェイク", "フェイクコンテンツ", "aiセキュリティ",
+    
+        # その他関連分野
+        "ロボット", "ロボティクス", "自動運転", "顔認識", "感情認識",
+        "ビッグデータ", "データサイエンス", "データ分析", "エッジai", "オンデバイスai"
     ]
+
     
     filtered = []
     for article in articles:
