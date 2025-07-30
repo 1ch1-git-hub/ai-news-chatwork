@@ -316,7 +316,8 @@ def post_to_chatwork(message: str) -> None:
         "X-ChatWorkToken": CHATWORK_TOKEN,
         "Content-Type": "application/x-www-form-urlencoded"
     }
-    data = {"body": message}
+    
+    data = {"body": "[toall]\n" + message}
     resp = requests.post(url, headers=headers, data=data)
     resp.raise_for_status()
 
