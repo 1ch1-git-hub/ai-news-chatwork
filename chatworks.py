@@ -2,10 +2,16 @@
 # -*- coding: utf-8 -*-
 
 """
-chatworks.py
+chatworks.py - 改善版
 
 毎朝9時に日本語の"AI"関連記事タイトル＋リンクを取得し、
 指定のChatWorkルームへ投稿するスクリプト。
+
+改善点:
+- ニュース配信数を5件に最適化
+- AIキーワードを最新トレンドに特化
+- RSSフィードを高品質ソースに厳選
+- スコアリング機能を強化
 
 事前準備:
     pip install requests beautifulsoup4[lxml]
@@ -21,75 +27,48 @@ from bs4 import BeautifulSoup
 # ——— 環境変数から設定を取得 ———
 CHATWORK_TOKEN   = os.environ.get("CHATWORK_TOKEN")
 CHATWORK_ROOM_ID = os.environ.get("CHATWORK_ROOM_ID")
-NEWS_LIMIT       = 8
+NEWS_LIMIT       = 5  # 🔥 改善: 8件から5件に変更
 
 # 設定チェック
 if not CHATWORK_TOKEN or not CHATWORK_ROOM_ID:
     logging.error("環境変数 CHATWORK_TOKEN と CHATWORK_ROOM_ID を設定してください")
     sys.exit(1)
 
-# ——————————————
-
-# 日本語サイトのRSSフィード（動作確認済みのURLに修正）
+# 🔥 改善: 厳選された高品質RSSフィード
 FEED_URLS = [
-    # 主要ニュースサイト
+    # トップニュースサイト
     "https://news.google.com/rss/search?q=AI&hl=ja&gl=JP&ceid=JP:ja",
     "https://news.yahoo.co.jp/rss/topics/it.xml",
-    "https://feeds.reuters.com/reuters/JPtechnologyNews",
     
-    # IT系専門メディア（動作確認済み）
-    "https://rss.itmedia.co.jp/rss/2.0/itmedia_news.xml",
+    # 主要IT専門メディア
     "https://rss.itmedia.co.jp/rss/2.0/itmedia_aiplus.xml",
-    "http://feed.japan.cnet.com/rss/index.rdf",
-    "https://ascii.jp/rss.xml",
-    "https://www.watch.impress.co.jp/data/rss/1.0/ipw/feed.rdf",
-    "https://internet.watch.impress.co.jp/data/rss/1.0/iw/feed.rdf",
-    "https://pc.watch.impress.co.jp/data/rss/1.0/pcw/feed.rdf",
-    "https://akiba-pc.watch.impress.co.jp/data/rss/1.0/ah/feed.rdf",
-    "https://forest.watch.impress.co.jp/data/rss/1.0/wf/feed.rdf",
+    "https://rss.itmedia.co.jp/rss/2.0/itmedia_news.xml",
     "https://gigazine.net/news/rss_2.0/",
+    "https://ascii.jp/rss.xml",
     
-    # 技術系メディア（動作確認済み）
+    # 技術系トップメディア
     "https://www.publickey1.jp/atom.xml",
-    "https://codezine.jp/rss/new/20/index.xml",
-    "https://gihyo.jp/feed/rss2",
     "https://xtech.nikkei.com/rss/index.rdf",
-    "https://weekly.ascii.jp/rss.xml",
+    "https://gihyo.jp/feed/rss2",
     
-    # ビジネス・経済系（動作確認済み）
+    # ビジネス・経済系
     "https://toyokeizai.net/list/feed/rss",
     "https://diamond.jp/list/feed/rss",
     
-    # スタートアップ・IT系
-    "https://thebridge.jp/feed",
-    "https://www.sbbit.jp/rss/HotTopics.rss",
-    
-    # AI特化メディア
+    # AI特化・開発者向け
     "https://ainow.ai/feed/",
-    
-    # 企業ブログ・テックブログ（動作確認済み）
-    "https://developers.cyberagent.co.jp/blog/feed/",
-    "https://techblog.yahoo.co.jp/atom.xml",
-    "https://developer.hatenastaff.com/rss",
-    "https://blog.recruit.co.jp/rtc/feed/",
-    
-    # 追加の技術系サイト
     "https://qiita.com/popular-items/feed",
     "https://zenn.dev/feed",
     
-    # 大学・研究機関
-    "https://resou.osaka-u.ac.jp/ja/rss.xml",
-    
-    # その他のIT系メディア
-    "https://it.srad.jp/srad.rdf",
-    "https://japan.zdnet.com/rss/index.rdf",
+    # 企業テックブログ（選抜）
+    "https://developers.cyberagent.co.jp/blog/feed/",
 ]
 
 REQUEST_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/102.0.0.0 Safari/537.36"
+        "Chrome/120.0.0.0 Safari/537.36"
     )
 }
 
@@ -100,57 +79,32 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 
-
 def get_source_name(url: str) -> str:
-    """
-    URLから情報源の名前を取得
-    """
+    """URLから情報源の名前を取得（簡略化）"""
     source_mapping = {
         "news.google.com": "Google ニュース",
         "news.yahoo.co.jp": "Yahoo! ニュース",
-        "feeds.reuters.com": "Reuters Japan",
         "itmedia.co.jp": "ITmedia",
-        "feed.japan.cnet.com": "CNET Japan",
-        "ascii.jp": "ASCII.jp",
-        "watch.impress.co.jp": "Impress Watch",
-        "internet.watch.impress.co.jp": "INTERNET Watch", 
-        "pc.watch.impress.co.jp": "PC Watch",
-        "akiba-pc.watch.impress.co.jp": "AKIBA PC Hotline!",
-        "forest.watch.impress.co.jp": "窓の杜",
         "gigazine.net": "GIGAZINE",
+        "ascii.jp": "ASCII.jp",
         "publickey1.jp": "Publickey",
-        "codezine.jp": "CodeZine",
-        "gihyo.jp": "技術評論社",
         "xtech.nikkei.com": "日経クロステック",
-        "weekly.ascii.jp": "週刊アスキー",
-        "toyokeizai.net": "東洋経済オンライン",
-        "diamond.jp": "ダイヤモンド・オンライン",
-        "thebridge.jp": "THE BRIDGE",
-        "sbbit.jp": "SB Creative",
+        "gihyo.jp": "技術評論社",
+        "toyokeizai.net": "東洋経済",
+        "diamond.jp": "ダイヤモンド",
         "ainow.ai": "AINOW",
-        "developers.cyberagent.co.jp": "CyberAgent",
-        "techblog.yahoo.co.jp": "Yahoo! JAPAN Tech Blog",
-        "developer.hatenastaff.com": "Hatena Developer Blog",
-        "blog.recruit.co.jp": "Recruit Tech Blog",
         "qiita.com": "Qiita",
         "zenn.dev": "Zenn",
-        "osaka-u.ac.jp": "大阪大学",
-        "srad.jp": "スラド",
-        "zdnet.com": "ZDNet Japan",
+        "developers.cyberagent.co.jp": "CyberAgent",
     }
     
     for domain, name in source_mapping.items():
         if domain in url:
             return name
-    
     return "その他"
 
-
 def fetch_ai_news(limit: int = NEWS_LIMIT) -> list[dict]:
-    """
-    日本語フィードから"AI"関連記事のタイトル＋リンクを取得し、
-    limit 件だけ返す。
-    """
+    """AI関連記事を取得"""
     articles = []
     successful_feeds = 0
     failed_feeds = 0
@@ -167,7 +121,6 @@ def fetch_ai_news(limit: int = NEWS_LIMIT) -> list[dict]:
             continue
 
         try:
-            # 通常のRSS/AtomフィードをXMLで処理
             soup = BeautifulSoup(resp.content, "xml")
             source_name = get_source_name(url)
             
@@ -214,47 +167,23 @@ def fetch_ai_news(limit: int = NEWS_LIMIT) -> list[dict]:
 
     logging.info(f"フィード取得結果: 成功 {successful_feeds}件, 失敗 {failed_feeds}件")
 
-    # AI関連キーワードでフィルタリング（拡張キーワード）
+    # 🔥 改善: シンプルで効果的なAIキーワード（最新トレンド）
     ai_keywords = [
-    # 基本・全般
-        "ai", "ＡＩ", "人工知能", "機械学習", "マシンラーニング", "深層学習", "ディープラーニング",
-        "ニューラルネットワーク", "自然言語処理", "nlp", "アルゴリズム", "予測モデル",
-        "強化学習", "教師あり学習", "教師なし学習", "自己教師あり学習",
-    
-        # 生成AI・LLM
-        "生成ai", "生成ＡＩ", "大規模言語モデル", "llm", "マルチモーダルai", "multimodal",
-        "aiアシスタント", "aiエージェント", "aiエージェントシステム", "エージェントai", "ai代理人",
-        "プロンプトエンジニアリング", "自律エージェント", "オートエージェント", "オーケストレーションai",
-    
-        # モデル名
-        "chatgpt", "チャットgpt", "gpt", "gpt-3.5", "gpt-4", "gpt-4o",
-        "gemini", "bard", "claude", "claude2", "claude3",
-        "llama2", "llama3", "mistral", "mixtral", "command-r", "bloom", "orca", "groq", "stablelm",
-    
-        # 企業・サービス名（含：エージェントプラットフォーム）
-        "openai", "anthropic", "google ai", "microsoft ai", "meta ai", "nvidia", "huggingface",
-        "xai", "amazon bedrock", "cohere", "stability ai", "databricks", "perplexity", "groq",
-        "genspark", "autogen", "autogpt", "babyagi", "agentgpt", "crew ai", "metaagent", "openagents",
-    
-        # ツール・ライブラリ・技術要素
-        "neural", "transformer", "attention", "diffusion model", "vae", "gan", "embedding",
-        "tokenizer", "tensor", "vectordb", "pinecone", "faiss", "weaviate",
-        "tensorflow", "pytorch", "keras", "langchain", "llamaindex", "openrouter", "ollama",
-    
-        # 応用・ユースケース
-        "画像生成", "text to image", "音声生成", "text to speech", "動画生成", "自動要約",
-        "ai検索", "ai翻訳", "ai通訳", "aiライティング", "aiデザイン", "aiコーディング",
-        "業務自動化", "業務効率化", "チャットボット", "ナレッジ管理", "no-code ai", "low-code ai",
-    
-        # 社会的関心・規制
-        "ai倫理", "ai規制", "aiガバナンス", "ai著作権", "aiリスク", "aiハルシネーション",
-        "ディープフェイク", "フェイクコンテンツ", "aiセキュリティ",
-    
-        # その他関連分野
-        "ロボット", "ロボティクス", "自動運転", "顔認識", "感情認識",
-        "ビッグデータ", "データサイエンス", "データ分析", "エッジai", "オンデバイスai"
+        # 基本キーワード
+        "ai", "ＡＩ", "人工知能", "機械学習", "深層学習",
+        
+        # 生成AI・LLMトレンド
+        "生成ai", "生成ＡＩ", "大規模言語モデル", "llm",
+        
+        # 主要AIサービス
+        "chatgpt", "チャットgpt", "gpt", "claude", "gemini",
+        
+        # 企業・技術
+        "openai", "anthropic", "google ai", "transformer",
+        
+        # 応用分野
+        "画像生成", "aiライティング", "自動化", "チャットボット"
     ]
-
     
     filtered = []
     for article in articles:
@@ -262,36 +191,39 @@ def fetch_ai_news(limit: int = NEWS_LIMIT) -> list[dict]:
         if any(keyword in title_lower for keyword in ai_keywords):
             filtered.append(article)
 
-    # 重複排除とスコアリング
-    seen_urls = set()
-    seen_titles = set()
-    unique = []
-    
-    # AIキーワードの重要度でソート
+    # 🔥 改善: より精密なスコアリング機能
     def calculate_ai_score(title):
         title_lower = title.lower()
         score = 0
-        # 重要なキーワードに高いスコア
-        high_priority = ["chatgpt", "gpt", "openai", "claude", "gemini", "生成ai", "生成ＡＩ"]
-        medium_priority = ["ai", "ＡＩ", "人工知能", "機械学習", "深層学習"]
         
+        # 最高優先度キーワード
+        ultra_priority = ["chatgpt", "gpt-4", "claude", "gemini", "生成ai"]
+        high_priority = ["openai", "anthropic", "大規模言語モデル", "llm"]
+        medium_priority = ["ai", "ＡＩ", "人工知能", "機械学習"]
+        
+        for keyword in ultra_priority:
+            if keyword in title_lower:
+                score += 5
         for keyword in high_priority:
             if keyword in title_lower:
                 score += 3
         for keyword in medium_priority:
             if keyword in title_lower:
                 score += 1
+        
         return score
     
-    # スコア順にソート
+    # 重複排除とスコア順ソート
+    seen_urls = set()
+    seen_titles = set()
+    unique = []
+    
     filtered.sort(key=lambda x: calculate_ai_score(x["title"]), reverse=True)
     
     for article in filtered:
-        # URL重複チェック
         if article["link"] in seen_urls:
             continue
         
-        # タイトル類似性チェック（簡易版：最初の30文字で判定）
         title_key = article["title"][:30].strip()
         if title_key in seen_titles:
             continue
@@ -306,11 +238,8 @@ def fetch_ai_news(limit: int = NEWS_LIMIT) -> list[dict]:
     logging.info(f"Selected {len(unique)} AI articles from {len(filtered)} filtered articles")
     return unique
 
-
 def post_to_chatwork(message: str) -> None:
-    """
-    ChatWorkへメッセージ投稿。
-    """
+    """ChatWorkへメッセージ投稿"""
     url = f"https://api.chatwork.com/v2/rooms/{CHATWORK_ROOM_ID}/messages"
     headers = {
         "X-ChatWorkToken": CHATWORK_TOKEN,
@@ -321,34 +250,27 @@ def post_to_chatwork(message: str) -> None:
     resp = requests.post(url, headers=headers, data=data)
     resp.raise_for_status()
 
-
 def build_news_message(articles: list[dict]) -> str:
-    """
-    AIニュース一覧の統合メッセージを作成。
-    """
+    """AIニュース一覧メッセージを作成"""
     current_date = datetime.now().strftime("%Y年%m月%d日")
     current_time = datetime.now().strftime("%H:%M")
     
-    # 情報源の統計
     sources = {}
     for article in articles:
         source = article.get("source", "不明")
         sources[source] = sources.get(source, 0) + 1
     
-    # ヘッダー部分
     message_parts = [
         f"[info][title]🤖 本日のAIニュース - {current_date}[/title]",
         f"📅 配信時刻: {current_time}",
-        f"📊 記事数: {len(articles)}件",
+        f"📊 記事数: {len(articles)}件（厳選版）",
         f"📡 情報源: {len(sources)}サイト",
         "",
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         ""
     ]
     
-    # 記事リスト部分
     for i, article in enumerate(articles, 1):
-        # タイトルの長さ制限
         title = article['title']
         if len(title) > 75:
             title = title[:72] + "..."
@@ -362,7 +284,6 @@ def build_news_message(articles: list[dict]) -> str:
             ""
         ])
     
-    # 情報源サマリー（上位5つまで表示）
     if len(sources) > 1:
         message_parts.extend([
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
@@ -376,21 +297,17 @@ def build_news_message(articles: list[dict]) -> str:
         
         message_parts.append("")
     
-    # フッター部分
     message_parts.extend([
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-        "✨ 最新のAI情報をお届けしました！",
+        "✨ 厳選された最新AI情報をお届けしました！",
         "📱 気になる記事があればリンクをクリックしてご覧ください。",
         "[/info]"
     ])
     
     return "\n".join(message_parts)
 
-
 def build_no_news_message() -> str:
-    """
-    記事が見つからない場合のメッセージを作成。
-    """
+    """記事が見つからない場合のメッセージ"""
     current_date = datetime.now().strftime("%Y年%m月%d日")
     current_time = datetime.now().strftime("%H:%M")
     
@@ -405,11 +322,8 @@ def build_no_news_message() -> str:
         f"[/info]"
     )
 
-
 def build_error_message() -> str:
-    """
-    エラー発生時のメッセージを作成。
-    """
+    """エラー発生時のメッセージ"""
     current_date = datetime.now().strftime("%Y年%m月%d日")
     current_time = datetime.now().strftime("%H:%M")
     
@@ -424,7 +338,6 @@ def build_error_message() -> str:
         f"[/info]"
     )
 
-
 def main():
     try:
         news_list = fetch_ai_news()
@@ -435,7 +348,6 @@ def main():
             post_to_chatwork(no_news_msg)
             return
 
-        # 統合メッセージを作成して投稿
         unified_msg = build_news_message(news_list)
         post_to_chatwork(unified_msg)
         
@@ -443,13 +355,11 @@ def main():
         
     except Exception as e:
         logging.exception("スクリプト実行中にエラーが発生しました。")
-        # エラー発生時の通知メッセージ
         error_msg = build_error_message()
         try:
             post_to_chatwork(error_msg)
         except:
             logging.error("エラー通知の投稿にも失敗しました。")
-
 
 if __name__ == "__main__":
     main()
