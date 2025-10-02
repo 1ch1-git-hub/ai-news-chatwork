@@ -27,14 +27,15 @@ from bs4 import BeautifulSoup
 # ——— 環境変数から設定を取得 ———
 CHATWORK_TOKEN   = os.environ.get("CHATWORK_TOKEN")
 CHATWORK_ROOM_ID = os.environ.get("CHATWORK_ROOM_ID")
-NEWS_LIMIT       = 5  # 🔥 改善: 8件から5件に変更
+NEWS_LIMIT       = 8  # 🔥 改善: マルチカテゴリー対応で8件に増加（AI 4件 + その他 4件）
 
 # 設定チェック
 if not CHATWORK_TOKEN or not CHATWORK_ROOM_ID:
     logging.error("環境変数 CHATWORK_TOKEN と CHATWORK_ROOM_ID を設定してください")
     sys.exit(1)
 
-# 🔥 改善: 多様で高品質なニュースソース（品質・バランス重視）
+# 🔥 改善: マルチカテゴリー対応の高品質ニュースソース
+# カテゴリー: AI, OFFICE, CISCO, BUSINESS, SELF_DEV
 FEED_URLS = {
     # Tier 1: 主要総合ニュース（基本情報収集）
     "tier1": [
@@ -85,6 +86,38 @@ FEED_URLS = {
     ]
 }
 
+# 🆕 追加カテゴリー用のフィード（Office/Excel、Cisco、ビジネススキル、自己啓発）
+ADDITIONAL_FEEDS = {
+    # Microsoft Office・Excel関連
+    "office": [
+        "https://techcommunity.microsoft.com/t5/excel-blog/bg-p/ExcelBlog/rss",
+        "https://support.microsoft.com/en-us/rss-feed",
+        "https://www.microsoft.com/en-us/microsoft-365/blog/feed/",
+        "https://office-hack.com/feed/",  # Office系日本語ブログ
+        "https://www.moug.net/rss.xml",   # Excel・Access技術情報
+    ],
+    
+    # Cisco・ネットワーク関連
+    "cisco": [
+        "https://blogs.cisco.com/rss",
+        "https://learningnetwork.cisco.com/s/rss",
+        "https://www.cisco.com/c/en/us/about/press/news-rss.xml",
+        "https://network.gihyo.jp/feed/rss2",  # ネットワーク技術日本語
+        "https://atmarkit.itmedia.co.jp/rss/rdf/ait.rdf",  # @IT ネットワーク
+    ],
+    
+    # ビジネス・自己啓発関連
+    "business_skills": [
+        "https://diamond.jp/list/feed/rss",
+        "https://toyokeizai.net/list/feed/rss",
+        "https://president.jp/rss.xml",
+        "https://newspicks.com/rss",
+        "https://www.lifehacker.jp/feed/index.xml",
+        "https://studyhacker.net/feed",  # 学習効率化
+        "https://globis.jp/rss.xml",     # ビジネススクール
+    ]
+}
+
 REQUEST_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -101,7 +134,7 @@ logging.basicConfig(
 )
 
 def get_source_name(url: str) -> str:
-    """URLから情報源の名前を取得（拡張版）"""
+    """URLから情報源の名前を取得（マルチカテゴリー対応版）"""
     source_mapping = {
         "news.google.com": "Google ニュース",
         "news.yahoo.co.jp": "Yahoo! ニュース",
@@ -126,6 +159,24 @@ def get_source_name(url: str) -> str:
         "techblog.yahoo.co.jp": "Yahoo! JAPAN",
         "engineering.mercari.com": "メルカリ",
         "developer.hatenastaff.com": "はてな",
+        # Office/Excel関連
+        "techcommunity.microsoft.com": "Microsoft Tech",
+        "support.microsoft.com": "Microsoft Support",
+        "microsoft.com": "Microsoft",
+        "office-hack.com": "Office Hack",
+        "moug.net": "MOUG",
+        # Cisco/ネットワーク関連  
+        "blogs.cisco.com": "Cisco Blogs",
+        "learningnetwork.cisco.com": "Cisco Learning",
+        "cisco.com": "Cisco",
+        "network.gihyo.jp": "ネットワーク技評",
+        "atmarkit.itmedia.co.jp": "@IT",
+        # ビジネス・自己啓発関連
+        "president.jp": "PRESIDENT",
+        "newspicks.com": "NewsPicks",
+        "lifehacker.jp": "ライフハッカー",
+        "studyhacker.net": "STUDY HACKER",
+        "globis.jp": "グロービス",
     }
     
     for domain, name in source_mapping.items():
@@ -133,8 +184,84 @@ def get_source_name(url: str) -> str:
             return name
     return "その他"
 
-def fetch_ai_news(limit: int = NEWS_LIMIT) -> list[dict]:
-    """AI関連記事を取得（ソース分散確保機能付き）"""
+def get_article_category(title: str) -> str:
+    """記事タイトルからカテゴリーを判定"""
+    title_lower = title.lower()
+    
+    # カテゴリー別キーワード辞書
+    category_keywords = {
+        "ai": [
+            # AI基本キーワード
+            "ai", "ＡＩ", "人工知能", "機械学習", "深層学習", "ディープラーニング",
+            # 生成AI・LLM
+            "生成ai", "生成ＡＩ", "大規模言語モデル", "llm", "生成型ai", "ジェネレーティブai",
+            # 主要AIサービス
+            "chatgpt", "チャットgpt", "gpt", "claude", "gemini", "bard", "copilot",
+            "mistral", "llama", "palm", "dall-e", "midjourney", "stable diffusion",
+        ],
+        
+        "office": [
+            # Microsoft Office関連
+            "excel", "エクセル", "microsoft office", "office 365", "microsoft 365",
+            "word", "ワード", "powerpoint", "パワーポイント", "パワポ",
+            "outlook", "アウトルック", "access", "アクセス",
+            "onenote", "ワンノート", "teams", "チームズ",
+            # Excel機能関連
+            "vlookup", "pivot", "ピボット", "関数", "マクロ", "vba",
+            "ショートカット", "便利機能", "効率化", "自動化",
+        ],
+        
+        "cisco": [
+            # Cisco関連
+            "cisco", "シスコ", "ccna", "ccnp", "ccie", "ccent",
+            "routing", "switching", "ルーティング", "スイッチング",
+            # ネットワーク関連
+            "network", "ネットワーク", "tcp/ip", "bgp", "ospf", "eigrp",
+            "vlan", "stp", "vpn", "セキュリティ",
+            "インフラ", "サーバー", "スイッチ", "ルーター",
+        ],
+        
+        "business_skills": [
+            # ビジネススキル関連
+            "空雨傘", "空・雨・傘", "事実・解釈・打手",
+            "ロジカルシンキング", "問題解決", "思考法",
+            "マネジメント", "リーダーシップ", "コミュニケーション",
+            "プレゼンテーション", "会議", "交渉", "営業",
+            # ビジネスフレームワーク
+            "mece", "3c", "4p", "swot", "pdca", "kpi", "okr",
+            "戦略", "マーケティング", "ブランディング",
+        ],
+        
+        "self_development": [
+            # 7つの習慣関連
+            "7つの習慣", "七つの習慣", "スティーブン・コヴィー",
+            "主体性", "終わりを思い描く", "最優先事項",
+            "win-win", "理解してから理解される", "シナジー",
+            # アドラー心理学関連
+            "アドラー", "アドラー心理学", "個人心理学",
+            "勇気", "共同体感覚", "課題の分離", "目的論",
+            # 自己啓発一般
+            "自己啓発", "スキルアップ", "成長", "学習",
+            "モチベーション", "習慣", "目標設定", "時間管理",
+            "ライフハック", "生産性", "効率化", "ワークライフバランス",
+        ]
+    }
+    
+    # スコアリング: キーワードマッチ数でカテゴリーを判定
+    category_scores = {}
+    for category, keywords in category_keywords.items():
+        score = sum(1 for keyword in keywords if keyword in title_lower)
+        if score > 0:
+            category_scores[category] = score
+    
+    if not category_scores:
+        return "other"
+    
+    # 最高スコアのカテゴリーを返す
+    return max(category_scores.items(), key=lambda x: x[1])[0]
+
+def fetch_multi_category_news(limit: int = NEWS_LIMIT) -> list[dict]:
+    """マルチカテゴリー記事を取得（AI + ビジネススキル + 技術系）"""
     articles = []
     successful_feeds = 0
     failed_feeds = 0
@@ -175,11 +302,16 @@ def fetch_ai_news(limit: int = NEWS_LIMIT) -> list[dict]:
                     link = link_elem.get_text(strip=True)
                     
                     if title and link:
+                        # 記事のカテゴリーを判定
+                        article_category = get_article_category(title)
+                        
                         articles.append({
                             "title": title,
                             "link": link,
                             "source": source_name,
-                            "tier": tier
+                            "tier": category_or_tier if feed_type == "ai_source" else "additional",
+                            "category": article_category,
+                            "feed_type": feed_type
                         })
                         source_stats[source_name] += 1
             
@@ -199,11 +331,16 @@ def fetch_ai_news(limit: int = NEWS_LIMIT) -> list[dict]:
                             link = link_elem.get_text(strip=True)
                     
                     if title and link:
+                        # 記事のカテゴリーを判定
+                        article_category = get_article_category(title)
+                        
                         articles.append({
                             "title": title,
                             "link": link,
                             "source": source_name,
-                            "tier": tier
+                            "tier": category_or_tier if feed_type == "ai_source" else "additional",
+                            "category": article_category,
+                            "feed_type": feed_type
                         })
                         source_stats[source_name] += 1
                         
@@ -244,44 +381,56 @@ def fetch_ai_news(limit: int = NEWS_LIMIT) -> list[dict]:
         "ai倫理", "ai規制", "explainable ai", "edge ai", "量子ai"
     ]
     
-    filtered = []
-    for article in articles:
-        title_lower = article["title"].lower()
-        if any(keyword in title_lower for keyword in ai_keywords):
-            filtered.append(article)
+    # 🔥 改善: マルチカテゴリーフィルタリング（既にget_article_categoryで実装済み）
+    # 「その他」カテゴリーの記事は除外
+    filtered = [article for article in articles if article.get("category", "other") != "other"]
 
-    # 🔥 改善: 精密なスコアリング機能（Tier考慮、キーワード重み付け）
-    def calculate_ai_score(article):
+    # 🔥 改善: マルチカテゴリー対応スコアリング機能
+    def calculate_multi_category_score(article):
         title_lower = article["title"].lower()
         source = article.get("source", "")
-        tier = article.get("tier", "tier6")
+        tier = article.get("tier", "additional")
+        category = article.get("category", "other")
         score = 0
         
-        # Tierボーナス（高品質ソース優先）
-        tier_bonus = {
-            "tier1": 2,  # 総合ニュース
-            "tier2": 3,  # IT専門メディア
-            "tier3": 2,  # ビジネス系
-            "tier4": 4,  # 技術専門
-            "tier5": 1,  # コミュニティ
-            "tier6": 1   # 企業ブログ
+        # Tierボーナス（AIソースのみ）
+        if tier != "additional":
+            tier_bonus = {
+                "tier1": 2, "tier2": 3, "tier3": 2,
+                "tier4": 4, "tier5": 1, "tier6": 1
+            }
+            score += tier_bonus.get(tier, 1)
+        else:
+            score += 2  # 追加ソースのベーススコア
+        
+        # カテゴリー別ボーナス
+        category_bonus = {
+            "ai": 5,              # AI関連は最高優先
+            "office": 4,          # Officeスキルは高便益
+            "cisco": 3,           # 技術系は中程度
+            "business_skills": 4, # ビジネススキルは高便益
+            "self_development": 4 # 自己啓発は高便益
         }
-        score += tier_bonus.get(tier, 1)
+        score += category_bonus.get(category, 1)
         
-        # 最高優先度キーワード（2024年トレンド）
-        ultra_priority = ["chatgpt", "gpt-4", "claude", "gemini", "生成ai", "マルチモーダル"]
-        high_priority = ["openai", "anthropic", "大規模言語モデル", "llm", "copilot", "dall-e"]
-        medium_priority = ["ai", "ＡＩ", "人工知能", "機械学習", "自動化", "チャットボット"]
-        
-        for keyword in ultra_priority:
-            if keyword in title_lower:
-                score += 8
-        for keyword in high_priority:
-            if keyword in title_lower:
-                score += 5
-        for keyword in medium_priority:
-            if keyword in title_lower:
-                score += 2
+        # カテゴリー別キーワード重み付け
+        if category == "ai":
+            ultra_keywords = ["chatgpt", "claude", "gemini", "生成ai"]
+            high_keywords = ["openai", "llm", "大規模言語モデル"]
+            for kw in ultra_keywords:
+                if kw in title_lower: score += 8
+            for kw in high_keywords:
+                if kw in title_lower: score += 5
+                
+        elif category == "office":
+            key_keywords = ["excel", "powerpoint", "エクセル", "ショートカット", "vba"]
+            for kw in key_keywords:
+                if kw in title_lower: score += 6
+                
+        elif category in ["business_skills", "self_development"]:
+            popular_keywords = ["空雨傘", "7つの習慣", "アドラー", "ロジカル"]
+            for kw in popular_keywords:
+                if kw in title_lower: score += 7
         
         return score
     
@@ -315,7 +464,7 @@ def fetch_ai_news(limit: int = NEWS_LIMIT) -> list[dict]:
     source_count = {}  # ソース別記事数カウント
     
     # スコア順でソート
-    filtered.sort(key=calculate_ai_score, reverse=True)
+    filtered.sort(key=calculate_multi_category_score, reverse=True)
     
     for article in filtered:
         # URL重複チェック
@@ -374,24 +523,30 @@ def post_to_chatwork(message: str) -> None:
     resp.raise_for_status()
 
 def build_news_message(articles: list[dict]) -> str:
-    """AIニュース一覧メッセージを作成（改善版）"""
+    """マルチカテゴリーニュース一覧メッセージを作成"""
     current_date = datetime.now().strftime("%Y年%m月%d日")
     current_time = datetime.now().strftime("%H:%M")
     
-    # ソース統計とTier情報を集計
+    # ソース統計、カテゴリー統計、Tier情報を集計
     sources = {}
+    category_stats = {}
     tier_stats = {}
+    
     for article in articles:
         source = article.get("source", "不明")
-        tier = article.get("tier", "tier6")
+        category = article.get("category", "other")
+        tier = article.get("tier", "additional")
+        
         sources[source] = sources.get(source, 0) + 1
+        category_stats[category] = category_stats.get(category, 0) + 1
         tier_stats[tier] = tier_stats.get(tier, 0) + 1
     
     message_parts = [
-        f"[info][title]🤖 週間AIニュースダイジェスト - {current_date}[/title]",
+        f"[info][title]🚀 週間ビジネススキルダイジェスト - {current_date}[/title]",
         f"📅 配信時刻: {current_time} (毎週月曜日配信)",
         f"📊 記事数: {len(articles)}件 (厳選・重複排除済)",
         f"📡 情報源: {len(sources)}サイト (バランス調整済)",
+        f"🏷️ カテゴリー: {len(category_stats)}種類 (AI・ビジネススキル・技術)",
         "",
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         ""
@@ -405,19 +560,18 @@ def build_news_message(articles: list[dict]) -> str:
         source = article.get('source', '不明')
         tier = article.get('tier', 'tier6')
         
-        # Tierごとのアイコン
-        tier_icons = {
-            'tier1': '📢',  # 総合ニュース
-            'tier2': '💻',  # IT専門
-            'tier3': '💼',  # ビジネス
-            'tier4': '⚙️',   # 技術専門
-            'tier5': '👥',  # コミュニティ
-            'tier6': '🏢'   # 企業
+        # カテゴリーごとのアイコン
+        category_icons = {
+            'ai': '🤖',              # AI関連
+            'office': '📈',          # Office/Excel
+            'cisco': '🌐',           # Cisco/ネットワーク
+            'business_skills': '💼', # ビジネススキル
+            'self_development': '🌱'  # 自己啓発
         }
-        tier_icon = tier_icons.get(tier, '📰')
+        category_icon = category_icons.get(category, '📰')
         
         message_parts.extend([
-            f"{tier_icon} 【記事 {i}】{source}",
+            f"{category_icon} 【記事 {i}】{source} ({category.upper()})",
             f"💡 {title}",
             f"🔗 {article['link']}",
             ""
@@ -437,30 +591,30 @@ def build_news_message(articles: list[dict]) -> str:
         
         message_parts.extend([
             "",
-            "🔍 カテゴリ別分散:"
+            "🏷️ カテゴリ別分散:"
         ])
         
-        tier_names = {
-            'tier1': '総合ニュース',
-            'tier2': 'IT専門メディア', 
-            'tier3': 'ビジネス系',
-            'tier4': '技術専門',
-            'tier5': 'コミュニティ',
-            'tier6': '企業ブログ'
+        category_names = {
+            'ai': '🤖 AI・機械学習',
+            'office': '📈 Office・Excelスキル', 
+            'cisco': '🌐 Cisco・ネットワーク',
+            'business_skills': '💼 ビジネススキル',
+            'self_development': '🌱 自己啓発・成長'
         }
         
-        for tier, count in sorted(tier_stats.items()):
-            tier_name = tier_names.get(tier, tier)
-            message_parts.append(f"　• {tier_name}: {count}件")
+        for category, count in sorted(category_stats.items(), key=lambda x: x[1], reverse=True):
+            category_name = category_names.get(category, f'❓ {category}')
+            message_parts.append(f"　• {category_name}: {count}件")
         
         message_parts.append("")
     
     message_parts.extend([
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-        "✨ 高品質・多様な情報源から厳選したAIニュースをお届け！",
+        "✨ 高品質・多様な情報源から厳選したビジネススキル情報をお届け！",
         "🔍 重複排除・ソース分散アルゴリズムにより品質を確保。",
         "📱 気になる記事があればリンクをクリックしてご覧ください。",
         "📅 次回配信: 来週月曜日の朝9時です。",
+        "💡 AI・Office・Cisco・ビジネススキル・自己啓発の5カテゴリーを網羅。",
         "[/info]"
     ])
     
@@ -472,12 +626,12 @@ def build_no_news_message() -> str:
     current_time = datetime.now().strftime("%H:%M")
     
     return (
-        f"[info][title]🤖 本日のAIニュース - {current_date}[/title]\n"
+        f"[info][title]🚀 本日のビジネススキルニュース - {current_date}[/title]\n"
         f"📅 配信時刻: {current_time}\n"
         f"📊 記事数: 0件\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🔍 申し訳ございません。本日は新しいAI関連記事が見つかりませんでした。\n"
-        f"📰 明日また最新情報をお届けいたします！\n\n"
+        f"🔍 申し訳ございません。本日は新しい関連記事が見つかりませんでした。\n"
+        f"📰 来週また最新情報をお届けいたします！\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"[/info]"
     )
@@ -491,7 +645,7 @@ def build_error_message() -> str:
         f"[info][title]⚠️ システム通知 - {current_date}[/title]\n"
         f"📅 通知時刻: {current_time}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🚨 AIニュース配信でエラーが発生しました。\n"
+        f"🚨 ビジネススキルニュース配信でエラーが発生しました。\n"
         f"🔧 システム管理者にご確認ください。\n"
         f"🕐 次回の配信をお待ちください。\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -500,10 +654,10 @@ def build_error_message() -> str:
 
 def main():
     try:
-        news_list = fetch_ai_news()
+        news_list = fetch_multi_category_news()
         
         if not news_list:
-            logging.warning("取得できたAI記事がありませんでした。")
+            logging.warning("取得できた記事がありませんでした。")
             no_news_msg = build_no_news_message()
             post_to_chatwork(no_news_msg)
             return
@@ -511,7 +665,7 @@ def main():
         unified_msg = build_news_message(news_list)
         post_to_chatwork(unified_msg)
         
-        logging.info(f"AIニュース {len(news_list)}件を一括投稿しました。")
+        logging.info(f"マルチカテゴリーニュース {len(news_list)}件を一括投稿しました。")
         
     except Exception as e:
         logging.exception("スクリプト実行中にエラーが発生しました。")
