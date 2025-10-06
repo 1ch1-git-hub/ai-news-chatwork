@@ -90,8 +90,6 @@ FEED_URLS = {
 ADDITIONAL_FEEDS = {
     # Microsoft Office・Excel関連
     "office": [
-        "https://techcommunity.microsoft.com/t5/excel-blog/bg-p/ExcelBlog/rss",
-        "https://support.microsoft.com/en-us/rss-feed",
         "https://www.microsoft.com/en-us/microsoft-365/blog/feed/",
         "https://office-hack.com/feed/",  # Office系日本語ブログ
         "https://www.moug.net/rss.xml",   # Excel・Access技術情報
@@ -100,7 +98,6 @@ ADDITIONAL_FEEDS = {
     # Cisco・ネットワーク関連
     "cisco": [
         "https://blogs.cisco.com/rss",
-        "https://learningnetwork.cisco.com/s/rss",
         "https://www.cisco.com/c/en/us/about/press/news-rss.xml",
         "https://network.gihyo.jp/feed/rss2",  # ネットワーク技術日本語
         "https://atmarkit.itmedia.co.jp/rss/rdf/ait.rdf",  # @IT ネットワーク
@@ -110,11 +107,8 @@ ADDITIONAL_FEEDS = {
     "business_skills": [
         "https://diamond.jp/list/feed/rss",
         "https://toyokeizai.net/list/feed/rss",
-        "https://president.jp/rss.xml",
-        "https://newspicks.com/rss",
         "https://www.lifehacker.jp/feed/index.xml",
         "https://studyhacker.net/feed",  # 学習効率化
-        "https://globis.jp/rss.xml",     # ビジネススクール
     ]
 }
 
@@ -202,13 +196,15 @@ def get_article_category(title: str) -> str:
         
         "office": [
             # Microsoft Office関連
-            "excel", "エクセル", "microsoft office", "office 365", "microsoft 365",
+            "excel", "エクセル", "microsoft office", "office 365", "microsoft 365", "microsoft",
             "word", "ワード", "powerpoint", "パワーポイント", "パワポ",
             "outlook", "アウトルック", "access", "アクセス",
             "onenote", "ワンノート", "teams", "チームズ",
             # Excel機能関連
-            "vlookup", "pivot", "ピボット", "関数", "マクロ", "vba",
-            "ショートカット", "便利機能", "効率化", "自動化",
+            "vlookup", "pivot", "ピボット", "関数", "マクロ", "vba", "スプレッドシート",
+            "ショートカット", "便利機能", "効率化", "自動化", "表計算",
+            # 広く業務効率化関連
+            "業務効率", "生産性", "テレワーク", "リモートワーク", "デジタル化",
         ],
         
         "cisco": [
@@ -217,19 +213,24 @@ def get_article_category(title: str) -> str:
             "routing", "switching", "ルーティング", "スイッチング",
             # ネットワーク関連
             "network", "ネットワーク", "tcp/ip", "bgp", "ospf", "eigrp",
-            "vlan", "stp", "vpn", "セキュリティ",
-            "インフラ", "サーバー", "スイッチ", "ルーター",
+            "vlan", "stp", "vpn", "セキュリティ", "サイバー",
+            "インフラ", "サーバー", "スイッチ", "ルーター", "クラウド",
+            # 技術系キーワード
+            "システム", "it", "エンジニア", "クラウドコンピューティング", "aws", "azure",
         ],
         
         "business_skills": [
             # ビジネススキル関連
             "空雨傘", "空・雨・傘", "事実・解釈・打手",
-            "ロジカルシンキング", "問題解決", "思考法",
-            "マネジメント", "リーダーシップ", "コミュニケーション",
-            "プレゼンテーション", "会議", "交渉", "営業",
+            "ロジカルシンキング", "問題解決", "思考法", "論理的",
+            "マネジメント", "リーダーシップ", "コミュニケーション", "管理",
+            "プレゼンテーション", "会議", "交渉", "営業", "プレゼン",
             # ビジネスフレームワーク
             "mece", "3c", "4p", "swot", "pdca", "kpi", "okr",
-            "戦略", "マーケティング", "ブランディング",
+            "戦略", "マーケティング", "ブランディング", "経営", "事業",
+            # ビジネス一般
+            "ビジネス", "企業", "会社", "経済", "投資", "財務", "会計",
+            "キャリア", "転職", "働き方", "組織", "チーム", "人材",
         ],
         
         "self_development": [
@@ -241,9 +242,12 @@ def get_article_category(title: str) -> str:
             "アドラー", "アドラー心理学", "個人心理学",
             "勇気", "共同体感覚", "課題の分離", "目的論",
             # 自己啓発一般
-            "自己啓発", "スキルアップ", "成長", "学習",
-            "モチベーション", "習慣", "目標設定", "時間管理",
+            "自己啓発", "スキルアップ", "成長", "学習", "勉強", "教育",
+            "モチベーション", "習慣", "目標設定", "時間管理", "集中力",
             "ライフハック", "生産性", "効率化", "ワークライフバランス",
+            # 健康・メンタル
+            "健康", "メンタル", "ストレス", "睡眠", "運動", "心理", "マインド",
+            "幸福", "充実", "バランス", "リフレッシュ", "コツ", "方法",
         ]
     }
     
@@ -271,11 +275,18 @@ def fetch_multi_category_news(limit: int = NEWS_LIMIT) -> list[dict]:
     all_feeds = []
     for tier_name, feeds in FEED_URLS.items():
         for url in feeds:
-            all_feeds.append((url, tier_name))
+            all_feeds.append((url, tier_name, "ai_source"))
     
-    for url, tier in all_feeds:
+    # ADDITIONAL_FEEDSも追加
+    for category_name, feeds in ADDITIONAL_FEEDS.items():
+        for url in feeds:
+            all_feeds.append((url, category_name, "additional_source"))
+    
+    logging.info(f"処理対象フィード数: {len(all_feeds)}件")
+    
+    for url, category_or_tier, feed_type in all_feeds:
         try:
-            logging.info(f"Fetching feed: {url} (Tier: {tier})")
+            logging.info(f"Fetching feed: {url} (Category/Tier: {category_or_tier}, Type: {feed_type})")
             resp = requests.get(url, headers=REQUEST_HEADERS, timeout=15, verify=True)
             resp.raise_for_status()
             successful_feeds += 1
@@ -348,6 +359,7 @@ def fetch_multi_category_news(limit: int = NEWS_LIMIT) -> list[dict]:
             logging.warning(f"フィード解析失敗 ({get_source_name(url)}): {e}")
     
     # ソース統計をログ出力
+    logging.info(f"取得した全記事数: {len(articles)}件")
     logging.info(f"ソース別記事数: {dict(sorted(source_stats.items(), key=lambda x: x[1], reverse=True))}")
 
     logging.info(f"フィード取得結果: 成功 {successful_feeds}件, 失敗 {failed_feeds}件")
@@ -381,17 +393,24 @@ def fetch_multi_category_news(limit: int = NEWS_LIMIT) -> list[dict]:
         "ai倫理", "ai規制", "explainable ai", "edge ai", "量子ai"
     ]
     
-    # 🔥 改善: マルチカテゴリーフィルタリング（既にget_article_categoryで実装済み）
-    # 「その他」カテゴリーの記事は除外
-    filtered = [article for article in articles if article.get("category", "other") != "other"]
+    # 🔥 改善: マルチカテゴリーフィルタリング
+    # 全ての記事を残す（"other"も含む）でカテゴリーバランスを向上
+    filtered = articles
 
-    # 🔥 改善: マルチカテゴリー対応スコアリング機能
+    # 🔥 改善: バランス重視のマルチカテゴリースコアリング機能
+    category_counts = {}  # カテゴリー別の選択済み記事数を追跡
+    
     def calculate_multi_category_score(article):
         title_lower = article["title"].lower()
         source = article.get("source", "")
         tier = article.get("tier", "additional")
         category = article.get("category", "other")
         score = 0
+        
+        # バランシングボーナス: 少ないカテゴリーの記事に大きなボーナス
+        current_count = category_counts.get(category, 0)
+        balance_bonus = max(0, 10 - (current_count * 3))  # 同じカテゴリーが多いほどスコア減少
+        score += balance_bonus
         
         # Tierボーナス（AIソースのみ）
         if tier != "additional":
@@ -401,15 +420,16 @@ def fetch_multi_category_news(limit: int = NEWS_LIMIT) -> list[dict]:
             }
             score += tier_bonus.get(tier, 1)
         else:
-            score += 2  # 追加ソースのベーススコア
+            score += 3  # 追加ソースのベーススコアを上げる
         
-        # カテゴリー別ボーナス
+        # カテゴリー別ボーナス（バランス重視）
         category_bonus = {
-            "ai": 5,              # AI関連は最高優先
-            "office": 4,          # Officeスキルは高便益
-            "cisco": 3,           # 技術系は中程度
-            "business_skills": 4, # ビジネススキルは高便益
-            "self_development": 4 # 自己啓発は高便益
+            "ai": 3,              # AIの優先度を下げる
+            "office": 5,          # Officeスキルの優先度を上げる
+            "cisco": 4,           # 技術系の優先度を上げる
+            "business_skills": 5, # ビジネススキルの優先度を上げる
+            "self_development": 5, # 自己啓発の優先度を上げる
+            "other": 2            # その他も考慮に入れる
         }
         score += category_bonus.get(category, 1)
         
@@ -418,19 +438,24 @@ def fetch_multi_category_news(limit: int = NEWS_LIMIT) -> list[dict]:
             ultra_keywords = ["chatgpt", "claude", "gemini", "生成ai"]
             high_keywords = ["openai", "llm", "大規模言語モデル"]
             for kw in ultra_keywords:
-                if kw in title_lower: score += 8
+                if kw in title_lower: score += 4  # スコアを下げる
             for kw in high_keywords:
-                if kw in title_lower: score += 5
+                if kw in title_lower: score += 2  # スコアを下げる
                 
         elif category == "office":
-            key_keywords = ["excel", "powerpoint", "エクセル", "ショートカット", "vba"]
+            key_keywords = ["excel", "powerpoint", "エクセル", "ショートカット", "vba", "microsoft"]
             for kw in key_keywords:
-                if kw in title_lower: score += 6
+                if kw in title_lower: score += 8  # スコアを上げる
                 
         elif category in ["business_skills", "self_development"]:
-            popular_keywords = ["空雨傘", "7つの習慣", "アドラー", "ロジカル"]
+            popular_keywords = ["空雨傘", "7つの習慣", "アドラー", "ロジカル", "ビジネス", "経営"]
             for kw in popular_keywords:
                 if kw in title_lower: score += 7
+        
+        elif category == "cisco":
+            tech_keywords = ["cisco", "ネットワーク", "システム", "クラウド", "サーバー"]
+            for kw in tech_keywords:
+                if kw in title_lower: score += 6
         
         return score
     
@@ -497,17 +522,47 @@ def fetch_multi_category_news(limit: int = NEWS_LIMIT) -> list[dict]:
         unique.append(article)
         source_count[source_name] = current_source_count + 1
         
+        # カテゴリー別カウントを更新
+        category = article.get("category", "other")
+        category_counts[category] = category_counts.get(category, 0) + 1
+        
         if len(unique) >= limit:
             break
 
+    # 🆕 カテゴリーバランシング: 各カテゴリーから最低1件は含めるように調整
+    if len(unique) < limit:
+        category_counts = {}
+        for article in unique:
+            category = article.get("category", "other")
+            category_counts[category] = category_counts.get(category, 0) + 1
+        
+        # 不足しているカテゴリーから記事を追加
+        target_categories = ["ai", "office", "cisco", "business_skills", "self_development"]
+        for target_category in target_categories:
+            if category_counts.get(target_category, 0) == 0 and len(unique) < limit:
+                # このカテゴリーの記事を探して追加
+                for article in filtered:
+                    if (article.get("category") == target_category and 
+                        article["link"] not in seen_urls and
+                        len(unique) < limit):
+                        
+                        unique.append(article)
+                        seen_urls.add(article["link"])
+                        category_counts[target_category] = 1
+                        break
+
     # 結果統計をログ出力
     final_source_stats = {}
+    final_category_stats = {}
     for article in unique:
         source = article.get("source", "不明")
+        category = article.get("category", "other")
         final_source_stats[source] = final_source_stats.get(source, 0) + 1
+        final_category_stats[category] = final_category_stats.get(category, 0) + 1
     
-    logging.info(f"Selected {len(unique)} AI articles from {len(filtered)} filtered articles")
+    logging.info(f"Selected {len(unique)} articles from {len(filtered)} filtered articles")
     logging.info(f"最終選択ソース分散: {dict(sorted(final_source_stats.items(), key=lambda x: x[1], reverse=True))}")
+    logging.info(f"最終カテゴリー分散: {dict(sorted(final_category_stats.items(), key=lambda x: x[1], reverse=True))}")
     return unique
 
 def post_to_chatwork(message: str) -> None:
@@ -568,6 +623,7 @@ def build_news_message(articles: list[dict]) -> str:
             'business_skills': '💼', # ビジネススキル
             'self_development': '🌱'  # 自己啓発
         }
+        category = article.get('category', 'other')
         category_icon = category_icons.get(category, '📰')
         
         message_parts.extend([
