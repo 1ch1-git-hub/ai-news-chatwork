@@ -1,4 +1,4 @@
-# SES Tech Trends ChatWork Bot
+# SES Tech Trends ChatWork Bot 2026/02/20
 
 毎週月曜日朝9時にSES業界で求められる先端技術ニュース（AI・IoT・クラウド・セキュリティ・DX）をChatWorkに自動投稿するPythonスクリプトです。
 
